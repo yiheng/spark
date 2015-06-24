@@ -17,6 +17,9 @@
 
 package org.apache.spark.ml
 
+import java.{util => ju}
+
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
 import org.apache.spark.Logging
@@ -63,9 +66,7 @@ abstract class PipelineStage extends Params with Logging {
     outputSchema
   }
 
-  override def copy(extra: ParamMap): PipelineStage = {
-    super.copy(extra).asInstanceOf[PipelineStage]
-  }
+  override def copy(extra: ParamMap): PipelineStage
 }
 
 /**
@@ -97,12 +98,9 @@ class Pipeline(override val uid: String) extends Estimator[PipelineModel] {
   /** @group getParam */
   def getStages: Array[PipelineStage] = $(stages).clone()
 
-  override def validateParams(paramMap: ParamMap): Unit = {
-    val map = extractParamMap(paramMap)
-    getStages.foreach {
-      case pStage: Params => pStage.validateParams(map)
-      case _ =>
-    }
+  override def validateParams(): Unit = {
+    super.validateParams()
+    $(stages).foreach(_.validateParams())
   }
 
   /**
@@ -178,6 +176,11 @@ class PipelineModel private[ml] (
     val stages: Array[Transformer])
   extends Model[PipelineModel] with Logging {
 
+  /** A Java/Python-friendly auxiliary constructor. */
+  private[ml] def this(uid: String, stages: ju.List[Transformer]) = {
+    this(uid, stages.asScala.toArray)
+  }
+
   override def validateParams(): Unit = {
     super.validateParams()
     stages.foreach(_.validateParams())
@@ -193,6 +196,6 @@ class PipelineModel private[ml] (
   }
 
   override def copy(extra: ParamMap): PipelineModel = {
-    new PipelineModel(uid, stages)
+    new PipelineModel(uid, stages.map(_.copy(extra)))
   }
 }

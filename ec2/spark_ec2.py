@@ -51,7 +51,7 @@ else:
     raw_input = input
     xrange = range
 
-SPARK_EC2_VERSION = "1.3.1"
+SPARK_EC2_VERSION = "1.4.0"
 SPARK_EC2_DIR = os.path.dirname(os.path.realpath(__file__))
 
 VALID_SPARK_VERSIONS = set([
@@ -70,6 +70,7 @@ VALID_SPARK_VERSIONS = set([
     "1.2.1",
     "1.3.0",
     "1.3.1",
+    "1.4.0",
 ])
 
 SPARK_TACHYON_MAP = {
@@ -82,6 +83,7 @@ SPARK_TACHYON_MAP = {
     "1.2.1": "0.5.0",
     "1.3.0": "0.5.0",
     "1.3.1": "0.5.0",
+    "1.4.0": "0.6.4",
 }
 
 DEFAULT_SPARK_VERSION = SPARK_EC2_VERSION
@@ -89,7 +91,7 @@ DEFAULT_SPARK_GITHUB_REPO = "https://github.com/apache/spark"
 
 # Default location to get the spark-ec2 scripts (and ami-list) from
 DEFAULT_SPARK_EC2_GITHUB_REPO = "https://github.com/mesos/spark-ec2"
-DEFAULT_SPARK_EC2_BRANCH = "branch-1.3"
+DEFAULT_SPARK_EC2_BRANCH = "branch-1.4"
 
 
 def setup_external_libs(libs):
@@ -219,7 +221,8 @@ def parse_args():
              "(default: %default).")
     parser.add_option(
         "--hadoop-major-version", default="1",
-        help="Major version of Hadoop (default: %default)")
+        help="Major version of Hadoop. Valid options are 1 (Hadoop 1.0.4), 2 (CDH 4.2.0), yarn " +
+             "(Hadoop 2.4.0) (default: %default)")
     parser.add_option(
         "-D", metavar="[ADDRESS:]PORT", dest="proxy_port",
         help="Use SSH dynamic port forwarding to create a SOCKS proxy at " +
@@ -271,7 +274,8 @@ def parse_args():
         help="Launch fresh slaves, but use an existing stopped master if possible")
     parser.add_option(
         "--worker-instances", type="int", default=1,
-        help="Number of instances per worker: variable SPARK_WORKER_INSTANCES (default: %default)")
+        help="Number of instances per worker: variable SPARK_WORKER_INSTANCES. Not used if YARN " +
+             "is used as Hadoop major version (default: %default)")
     parser.add_option(
         "--master-opts", type="string", default="",
         help="Extra options to give to master through SPARK_MASTER_OPTS variable " +
@@ -285,6 +289,10 @@ def parse_args():
     parser.add_option(
         "--additional-security-group", type="string", default="",
         help="Additional security group to place the machines in")
+    parser.add_option(
+        "--additional-tags", type="string", default="",
+        help="Additional tags to set on the machines; tags are comma-separated, while name and " +
+             "value are colon separated; ex: \"Task:MySparkProject,Env:production\"")
     parser.add_option(
         "--copy-aws-credentials", action="store_true", default=False,
         help="Add AWS credentials to hadoop configuration to allow Spark to access S3")
@@ -354,7 +362,7 @@ def get_validate_spark_version(version, repo):
 
 
 # Source: http://aws.amazon.com/amazon-linux-ami/instance-type-matrix/
-# Last Updated: 2015-05-08
+# Last Updated: 2015-06-19
 # For easy maintainability, please keep this manually-inputted dictionary sorted by key.
 EC2_INSTANCE_TYPES = {
     "c1.medium":   "pvm",
@@ -396,6 +404,11 @@ EC2_INSTANCE_TYPES = {
     "m3.large":    "hvm",
     "m3.xlarge":   "hvm",
     "m3.2xlarge":  "hvm",
+    "m4.large":    "hvm",
+    "m4.xlarge":   "hvm",
+    "m4.2xlarge":  "hvm",
+    "m4.4xlarge":  "hvm",
+    "m4.10xlarge": "hvm",
     "r3.large":    "hvm",
     "r3.xlarge":   "hvm",
     "r3.2xlarge":  "hvm",
@@ -405,6 +418,7 @@ EC2_INSTANCE_TYPES = {
     "t2.micro":    "hvm",
     "t2.small":    "hvm",
     "t2.medium":   "hvm",
+    "t2.large":    "hvm",
 }
 
 
@@ -680,16 +694,24 @@ def launch_cluster(conn, opts, cluster_name):
 
     # This wait time corresponds to SPARK-4983
     print("Waiting for AWS to propagate instance metadata...")
-    time.sleep(5)
-    # Give the instances descriptive names
+    time.sleep(15)
+
+    # Give the instances descriptive names and set additional tags
+    additional_tags = {}
+    if opts.additional_tags.strip():
+        additional_tags = dict(
+            map(str.strip, tag.split(':', 1)) for tag in opts.additional_tags.split(',')
+        )
+
     for master in master_nodes:
-        master.add_tag(
-            key='Name',
-            value='{cn}-master-{iid}'.format(cn=cluster_name, iid=master.id))
+        master.add_tags(
+            dict(additional_tags, Name='{cn}-master-{iid}'.format(cn=cluster_name, iid=master.id))
+        )
+
     for slave in slave_nodes:
-        slave.add_tag(
-            key='Name',
-            value='{cn}-slave-{iid}'.format(cn=cluster_name, iid=slave.id))
+        slave.add_tags(
+            dict(additional_tags, Name='{cn}-slave-{iid}'.format(cn=cluster_name, iid=slave.id))
+        )
 
     # Return all the instances
     return (master_nodes, slave_nodes)
@@ -760,6 +782,10 @@ def setup_cluster(conn, master_nodes, slave_nodes, opts, deploy_ssh_key):
 
     if opts.ganglia:
         modules.append('ganglia')
+
+    # Clear SPARK_WORKER_INSTANCES if running on YARN
+    if opts.hadoop_major_version == "yarn":
+        opts.worker_instances = ""
 
     # NOTE: We should clone the repository before running deploy_files to
     # prevent ec2-variables.sh from being overwritten
@@ -903,7 +929,7 @@ def wait_for_cluster_state(conn, opts, cluster_instances, cluster_state):
 # Get number of local disks available for a given EC2 instance type.
 def get_num_disks(instance_type):
     # Source: http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/InstanceStorage.html
-    # Last Updated: 2015-05-08
+    # Last Updated: 2015-06-19
     # For easy maintainability, please keep this manually-inputted dictionary sorted by key.
     disks_by_instance = {
         "c1.medium":   1,
@@ -945,6 +971,11 @@ def get_num_disks(instance_type):
         "m3.large":    1,
         "m3.xlarge":   2,
         "m3.2xlarge":  2,
+        "m4.large":    0,
+        "m4.xlarge":   0,
+        "m4.2xlarge":  0,
+        "m4.4xlarge":  0,
+        "m4.10xlarge": 0,
         "r3.large":    1,
         "r3.xlarge":   1,
         "r3.2xlarge":  1,
@@ -954,6 +985,7 @@ def get_num_disks(instance_type):
         "t2.micro":    0,
         "t2.small":    0,
         "t2.medium":   0,
+        "t2.large":    0,
     }
     if instance_type in disks_by_instance:
         return disks_by_instance[instance_type]
@@ -998,6 +1030,7 @@ def deploy_files(conn, root_dir, opts, master_nodes, slave_nodes, modules):
 
     master_addresses = [get_dns_name(i, opts.private_ips) for i in master_nodes]
     slave_addresses = [get_dns_name(i, opts.private_ips) for i in slave_nodes]
+    worker_instances_str = "%d" % opts.worker_instances if opts.worker_instances else ""
     template_vars = {
         "master_list": '\n'.join(master_addresses),
         "active_master": active_master,
@@ -1011,7 +1044,7 @@ def deploy_files(conn, root_dir, opts, master_nodes, slave_nodes, modules):
         "spark_version": spark_v,
         "tachyon_version": tachyon_v,
         "hadoop_major_version": opts.hadoop_major_version,
-        "spark_worker_instances": "%d" % opts.worker_instances,
+        "spark_worker_instances": worker_instances_str,
         "spark_master_opts": opts.master_opts
     }
 

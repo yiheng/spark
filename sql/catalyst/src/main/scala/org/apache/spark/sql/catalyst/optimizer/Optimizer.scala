@@ -36,21 +36,23 @@ object DefaultOptimizer extends Optimizer {
     // SubQueries are only needed for analysis and can be removed before execution.
     Batch("Remove SubQueries", FixedPoint(100),
       EliminateSubQueries) ::
-    Batch("Operator Reordering", FixedPoint(100),
+    Batch("Distinct", FixedPoint(100),
+      ReplaceDistinctWithAggregate) ::
+    Batch("Operator Optimizations", FixedPoint(100),
       UnionPushdown,
       CombineFilters,
       PushPredicateThroughProject,
-      PushPredicateThroughJoin,
       PushPredicateThroughGenerate,
       ColumnPruning,
       ProjectCollapsing,
-      CombineLimits) ::
-    Batch("ConstantFolding", FixedPoint(100),
+      CombineLimits,
       NullPropagation,
       OptimizeIn,
       ConstantFolding,
       LikeSimplification,
       BooleanSimplification,
+      PushPredicateThroughJoin,
+      RemovePositive,
       SimplifyFilters,
       SimplifyCasts,
       SimplifyCaseConversionExpressions) ::
@@ -119,6 +121,10 @@ object UnionPushdown extends Rule[LogicalPlan] {
  */
 object ColumnPruning extends Rule[LogicalPlan] {
   def apply(plan: LogicalPlan): LogicalPlan = plan transform {
+    case a @ Aggregate(_, _, e @ Expand(_, groupByExprs, _, child))
+      if (child.outputSet -- AttributeSet(groupByExprs) -- a.references).nonEmpty =>
+      a.copy(child = e.copy(child = prunedChild(child, AttributeSet(groupByExprs) ++ a.references)))
+
     // Eliminate attributes that are not needed to calculate the specified aggregates.
     case a @ Aggregate(_, _, child) if (child.outputSet -- a.references).nonEmpty =>
       a.copy(child = Project(a.references.toSeq, child))
@@ -179,8 +185,17 @@ object ColumnPruning extends Rule[LogicalPlan] {
  * expressions into one single expression.
  */
 object ProjectCollapsing extends Rule[LogicalPlan] {
+
+  /** Returns true if any expression in projectList is non-deterministic. */
+  private def hasNondeterministic(projectList: Seq[NamedExpression]): Boolean = {
+    projectList.exists(expr => expr.find(!_.deterministic).isDefined)
+  }
+
   def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
-    case Project(projectList1, Project(projectList2, child)) =>
+    // We only collapse these two Projects if the child Project's expressions are all
+    // deterministic.
+    case Project(projectList1, Project(projectList2, child))
+         if !hasNondeterministic(projectList2) =>
       // Create a map of Aliases to their values from the child projection.
       // e.g., 'SELECT ... FROM (SELECT a + b AS c, d ...)' produces Map(c -> Alias(a + b, c)).
       val aliasMap = AttributeMap(projectList2.collect {
@@ -255,7 +270,7 @@ object NullPropagation extends Rule[LogicalPlan] {
         if (newChildren.length == 0) {
           Literal.create(null, e.dataType)
         } else if (newChildren.length == 1) {
-          newChildren(0)
+          newChildren.head
         } else {
           Coalesce(newChildren)
         }
@@ -264,22 +279,23 @@ object NullPropagation extends Rule[LogicalPlan] {
       case e @ Substring(_, Literal(null, _), _) => Literal.create(null, e.dataType)
       case e @ Substring(_, _, Literal(null, _)) => Literal.create(null, e.dataType)
 
+      // MaxOf and MinOf can't do null propagation
+      case e: MaxOf => e
+      case e: MinOf => e
+
       // Put exceptional cases above if any
-      case e: BinaryArithmetic => e.children match {
-        case Literal(null, _) :: right :: Nil => Literal.create(null, e.dataType)
-        case left :: Literal(null, _) :: Nil => Literal.create(null, e.dataType)
-        case _ => e
-      }
-      case e: BinaryComparison => e.children match {
-        case Literal(null, _) :: right :: Nil => Literal.create(null, e.dataType)
-        case left :: Literal(null, _) :: Nil => Literal.create(null, e.dataType)
-        case _ => e
-      }
+      case e @ BinaryArithmetic(Literal(null, _), _) => Literal.create(null, e.dataType)
+      case e @ BinaryArithmetic(_, Literal(null, _)) => Literal.create(null, e.dataType)
+
+      case e @ BinaryComparison(Literal(null, _), _) => Literal.create(null, e.dataType)
+      case e @ BinaryComparison(_, Literal(null, _)) => Literal.create(null, e.dataType)
+
       case e: StringRegexExpression => e.children match {
         case Literal(null, _) :: right :: Nil => Literal.create(null, e.dataType)
         case left :: Literal(null, _) :: Nil => Literal.create(null, e.dataType)
         case _ => e
       }
+
       case e: StringComparison => e.children match {
         case Literal(null, _) :: right :: Nil => Literal.create(null, e.dataType)
         case left :: Literal(null, _) :: Nil => Literal.create(null, e.dataType)
@@ -622,6 +638,15 @@ object SimplifyCasts extends Rule[LogicalPlan] {
 }
 
 /**
+ * Removes [[UnaryPositive]] identify function
+ */
+object RemovePositive extends Rule[LogicalPlan] {
+  def apply(plan: LogicalPlan): LogicalPlan = plan transformAllExpressions {
+    case UnaryPositive(child) => child
+  }
+}
+
+/**
  * Combines two adjacent [[Limit]] operators into one, merging the
  * expressions into one single expression.
  */
@@ -681,5 +706,17 @@ object ConvertToLocalRelation extends Rule[LogicalPlan] {
     case Project(projectList, LocalRelation(output, data)) =>
       val projection = new InterpretedProjection(projectList, output)
       LocalRelation(projectList.map(_.toAttribute), data.map(projection))
+  }
+}
+
+/**
+ * Replaces logical [[Distinct]] operator with an [[Aggregate]] operator.
+ * {{{
+ *   SELECT DISTINCT f1, f2 FROM t  ==>  SELECT f1, f2 FROM t GROUP BY f1, f2
+ * }}}
+ */
+object ReplaceDistinctWithAggregate extends Rule[LogicalPlan] {
+  def apply(plan: LogicalPlan): LogicalPlan = plan transform {
+    case Distinct(child) => Aggregate(child.output, child.output, child)
   }
 }
