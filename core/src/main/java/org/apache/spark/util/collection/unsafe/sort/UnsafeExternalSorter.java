@@ -206,7 +206,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
       return 0L;
     }
 
-    logger.info("Thread {} spilling sort data of {} to disk ({} {} so far)",
+    logger.info("===>Thread {} spilling sort data of {} to disk ({} {} so far)",
       Thread.currentThread().getId(),
       Utils.bytesToString(getMemoryUsage()),
       spillWriters.size(),
