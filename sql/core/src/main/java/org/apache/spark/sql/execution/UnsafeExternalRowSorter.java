@@ -169,7 +169,62 @@ public final class UnsafeExternalRowSorter {
   }
 
   public Iterator<UnsafeRow> sort() throws IOException {
-    logger.info("<<<<< total count is " + numRowsInserted);
+    if (numRowsInserted != 0) {
+      logger.info("<<<<< total count is " + numRowsInserted);
+      try {
+        final UnsafeSorterIterator sortedIterator = sorter.getSortedIterator();
+        if (!sortedIterator.hasNext()) {
+          // Since we won't ever call next() on an empty iterator, we need to clean up resources
+          // here in order to prevent memory leaks.
+          cleanupResources();
+        }
+        logger.info("<<<<< Sort iterator count is " + sortedIterator.getNumRecords());
+        AbstractIterator<UnsafeRow> iterator = new AbstractIterator<UnsafeRow>() {
+
+          private final int numFields = schema.length();
+          private UnsafeRow row = new UnsafeRow(numFields);
+
+          @Override
+          public boolean hasNext() {
+            return sortedIterator.hasNext();
+          }
+
+          @Override
+          public UnsafeRow next() {
+            try {
+              sortedIterator.loadNext();
+              row.pointTo(
+                  sortedIterator.getBaseObject(),
+                  sortedIterator.getBaseOffset(),
+                  sortedIterator.getRecordLength());
+              if (!hasNext()) {
+                UnsafeRow copy = row.copy(); // so that we don't have dangling pointers to freed page
+                row = null; // so that we don't keep references to the base object
+                cleanupResources();
+                return copy;
+              } else {
+                return row;
+              }
+            } catch (IOException e) {
+              cleanupResources();
+              // Scala iterators don't declare any checked exceptions, so we need to use this hack
+              // to re-throw the exception:
+              Platform.throwException(e);
+            }
+            throw new RuntimeException("Exception should have been re-thrown in next()");
+          }
+        };
+        long count = 0;
+        while(iterator.hasNext()) {
+          iterator.next();
+          count += 1;
+        }
+        logger.info("<<<<< iterator count is " + count);
+      } catch (IOException e) {
+        cleanupResources();
+        throw e;
+      }
+    }
     try {
       final UnsafeSorterIterator sortedIterator = sorter.getSortedIterator();
       if (!sortedIterator.hasNext()) {
@@ -177,7 +232,6 @@ public final class UnsafeExternalRowSorter {
         // here in order to prevent memory leaks.
         cleanupResources();
       }
-      logger.info("<<<<< Sort iterator count is " + sortedIterator.getNumRecords());
       return new AbstractIterator<UnsafeRow>() {
 
         private final int numFields = schema.length();
