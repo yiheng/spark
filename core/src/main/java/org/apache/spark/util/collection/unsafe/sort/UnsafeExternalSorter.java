@@ -25,6 +25,7 @@ import java.util.Queue;
 import java.util.function.Supplier;
 
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.spark.memory.SparkOutOfMemoryError;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -112,6 +113,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     // The external sorter will be used to insert records, in-memory sorter is not needed.
     sorter.inMemSorter = null;
     logger.info("===> sort total count is " + sorter.getSortedIterator().getNumRecords());
+    logger.info("===> Stack trace is " + ExceptionUtils.getStackTrace(new Throwable()));
     return sorter;
   }
 
