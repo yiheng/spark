@@ -346,7 +346,9 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
         array = allocateArray(used / 8 * 2);
       } catch (TooLargePageException e) {
         // The pointer array is too big to fix in a single page, spill.
+        logger.error("====> Before merge, total count is " + getSortedIterator().getNumRecords());
         spill();
+        logger.error("====> After merge, total count is " + getSortedIterator().getNumRecords());
         return;
       } catch (SparkOutOfMemoryError e) {
         // should have trigger spilling
