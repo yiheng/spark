@@ -111,6 +111,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     sorter.spill(Long.MAX_VALUE, sorter);
     // The external sorter will be used to insert records, in-memory sorter is not needed.
     sorter.inMemSorter = null;
+    logger.info("===> sort total count is " + sorter.getSortedIterator().getNumRecords());
     return sorter;
   }
 
