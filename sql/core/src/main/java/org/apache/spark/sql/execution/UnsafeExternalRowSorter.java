@@ -107,10 +107,6 @@ public final class UnsafeExternalRowSorter {
       UnsafeExternalRowSorter.PrefixComputer prefixComputer,
       long pageSizeBytes,
       boolean canUseRadixSort) {
-
-    if (true) {
-      throw new RuntimeException("stop")
-    }
     this.schema = schema;
     this.prefixComputer = prefixComputer;
     final SparkEnv sparkEnv = SparkEnv.get();
