@@ -20,6 +20,9 @@ package org.apache.spark.sql.execution;
 import java.io.IOException;
 import java.util.function.Supplier;
 
+import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import scala.collection.AbstractIterator;
 import scala.collection.Iterator;
 import scala.math.Ordering;
@@ -39,6 +42,8 @@ import org.apache.spark.util.collection.unsafe.sort.UnsafeExternalSorter;
 import org.apache.spark.util.collection.unsafe.sort.UnsafeSorterIterator;
 
 public final class UnsafeExternalRowSorter {
+
+  private static final Logger logger = LoggerFactory.getLogger(UnsafeExternalRowSorter.class);
 
   /**
    * If positive, forces records to be spilled to disk at the given frequency (measured in numbers
@@ -89,6 +94,8 @@ public final class UnsafeExternalRowSorter {
       boolean canUseRadixSort) throws IOException {
     Supplier<RecordComparator> recordComparatorSupplier =
       () -> new RowComparator(ordering, schema.length());
+
+    logger.info(">>>>>> sort create " + ExceptionUtils.getStackTrace(new Throwable()));
     return new UnsafeExternalRowSorter(schema, recordComparatorSupplier, prefixComparator,
       prefixComputer, pageSizeBytes, canUseRadixSort);
   }
@@ -162,6 +169,7 @@ public final class UnsafeExternalRowSorter {
   }
 
   public Iterator<UnsafeRow> sort() throws IOException {
+    logger.info("<<<<< total count is " + numRowsInserted);
     try {
       final UnsafeSorterIterator sortedIterator = sorter.getSortedIterator();
       if (!sortedIterator.hasNext()) {
@@ -169,6 +177,7 @@ public final class UnsafeExternalRowSorter {
         // here in order to prevent memory leaks.
         cleanupResources();
       }
+      logger.info("<<<<< Sort iterator count is " + sortedIterator.getNumRecords());
       return new AbstractIterator<UnsafeRow>() {
 
         private final int numFields = schema.length();
