@@ -261,7 +261,7 @@ public final class UnsafeExternalRowSorter {
                   cleanupResources();
                   logger.info("rrrrrrr Last row next, retrieve count is : " + count);
 
-                  InternalRow r = row.getStruct(1, 4);
+                  InternalRow r = copy.getStruct(1, 4);
                   byte v0 = r.isNullAt(0) ? -1 : r.getByte(0);
                   byte v1 = r.isNullAt(1) ? -1 : r.getByte(1);
                   byte v2 = r.isNullAt(2) ? -1 : r.getByte(2);
