@@ -198,7 +198,10 @@ public final class UnsafeExternalRowSorter {
             @Override
             public UnsafeRow next() {
               try {
+                InternalRow oldRow = row.getStruct(1, 4);
                 sortedIterator.loadNext();
+                logger.info("xxxxxxxx old row is " + oldRow.isNullAt(0) + " " +
+                    oldRow.isNullAt(0) + " " + oldRow.isNullAt(0) + " " + oldRow.isNullAt(0));
                 row.pointTo(
                     sortedIterator.getBaseObject(),
                     sortedIterator.getBaseOffset(),
