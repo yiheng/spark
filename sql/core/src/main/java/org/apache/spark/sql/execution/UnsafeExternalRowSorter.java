@@ -222,45 +222,50 @@ public final class UnsafeExternalRowSorter {
               throw new RuntimeException("Exception should have been re-thrown in next()");
             }
           };
-        }
-        return new AbstractIterator<UnsafeRow>() {
-          private long count = 0;
+        } else {
 
-          private final int numFields = schema.length();
-          private UnsafeRow row = new UnsafeRow(numFields);
+          return new AbstractIterator<UnsafeRow>() {
+            private long count = 0;
 
-          @Override
-          public boolean hasNext() {
-            return sortedIterator.hasNext();
-          }
+            private final int numFields = schema.length();
+            private UnsafeRow row = new UnsafeRow(numFields);
 
-          @Override
-          public UnsafeRow next() {
-            try {
-              sortedIterator.loadNext();
-              row.pointTo(
-                  sortedIterator.getBaseObject(),
-                  sortedIterator.getBaseOffset(),
-                  sortedIterator.getRecordLength());
-              count += 1;
-              if (!hasNext()) {
-                UnsafeRow copy = row.copy(); // so that we don't have dangling pointers to freed page
-                row = null; // so that we don't keep references to the base object
-                cleanupResources();
-                logger.info("xxxxxx Last row next, retrieve count is : " + count);
-                return copy;
-              } else {
-                return row;
-              }
-            } catch (IOException e) {
-              cleanupResources();
-              // Scala iterators don't declare any checked exceptions, so we need to use this hack
-              // to re-throw the exception:
-              Platform.throwException(e);
+            @Override
+            public boolean hasNext() {
+              boolean r = sortedIterator.hasNext();
+              logger.info("rrrrrrr has next is " + r);
+              return r;
             }
-            throw new RuntimeException("Exception should have been re-thrown in next()");
-          }
-        };
+
+            @Override
+            public UnsafeRow next() {
+              try {
+                sortedIterator.loadNext();
+                row.pointTo(
+                    sortedIterator.getBaseObject(),
+                    sortedIterator.getBaseOffset(),
+                    sortedIterator.getRecordLength());
+                logger.info("rrrrrrr next is called, current pos is " + count);
+                count += 1;
+                if (!hasNext()) {
+                  UnsafeRow copy = row.copy(); // so that we don't have dangling pointers to freed page
+                  row = null; // so that we don't keep references to the base object
+                  cleanupResources();
+                  logger.info("rrrrrrr Last row next, retrieve count is : " + count);
+                  return copy;
+                } else {
+                  return row;
+                }
+              } catch (IOException e) {
+                cleanupResources();
+                // Scala iterators don't declare any checked exceptions, so we need to use this hack
+                // to re-throw the exception:
+                Platform.throwException(e);
+              }
+              throw new RuntimeException("Exception should have been re-thrown in next()");
+            }
+          };
+        }
       }
       return new AbstractIterator<UnsafeRow>() {
 
