@@ -189,7 +189,9 @@ public final class UnsafeExternalRowSorter {
 
             @Override
             public boolean hasNext() {
-              return sortedIterator.hasNext();
+              boolean r = sortedIterator.hasNext();
+              logger.info("xxxxxx has next is " + r);
+              return r;
             }
 
             @Override
