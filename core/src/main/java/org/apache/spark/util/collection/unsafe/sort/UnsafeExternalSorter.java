@@ -602,6 +602,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
         }
       } finally {
         if (pageToFree != null) {
+          logger.info("--------- page free");
           freePage(pageToFree);
         }
       }
