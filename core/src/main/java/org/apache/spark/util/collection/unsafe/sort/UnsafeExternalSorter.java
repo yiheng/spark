@@ -579,6 +579,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     @Override
     public void loadNext() throws IOException {
       MemoryBlock pageToFree = null;
+      logger.info("--------- external sorter");
       try {
         synchronized (this) {
           loaded = true;
