@@ -710,6 +710,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
 
     @Override
     public void loadNext() throws IOException {
+      logger.info("------------------ loadnext happened");
       while (!current.hasNext() && !iterators.isEmpty()) {
         logger.info("------------------ remove happened");
         current = iterators.remove();
