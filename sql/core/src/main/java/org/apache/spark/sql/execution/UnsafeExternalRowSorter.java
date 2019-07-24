@@ -191,6 +191,7 @@ public final class UnsafeExternalRowSorter {
             public boolean hasNext() {
               boolean r = sortedIterator.hasNext();
               logger.info("xxxxxx has next is " + r);
+              logger.info("xxxxxx has next stack trace is " + ExceptionUtils.getStackTrace(new Throwable()));
               return r;
             }
 
@@ -234,6 +235,7 @@ public final class UnsafeExternalRowSorter {
             public boolean hasNext() {
               boolean r = sortedIterator.hasNext();
               logger.info("rrrrrrr has next is " + r);
+              logger.info("rrrrrrr has next stack trace is " + ExceptionUtils.getStackTrace(new Throwable()));
               return r;
             }
 
@@ -246,7 +248,6 @@ public final class UnsafeExternalRowSorter {
                     sortedIterator.getBaseOffset(),
                     sortedIterator.getRecordLength());
                 logger.info("rrrrrrr next is called, current pos is " + count);
-                logger.info("rrrrrrr next stack trace is " + ExceptionUtils.getStackTrace(new Throwable()));
                 count += 1;
                 if (!hasNext()) {
                   UnsafeRow copy = row.copy(); // so that we don't have dangling pointers to freed page
