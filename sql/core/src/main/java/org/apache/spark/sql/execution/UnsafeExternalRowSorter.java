@@ -209,7 +209,7 @@ public final class UnsafeExternalRowSorter {
                 byte v1 = r.isNullAt(1) ? -1 : r.getByte(1);
                 byte v2 = r.isNullAt(2) ? -1 : r.getByte(2);
                 byte v3 = r.isNullAt(3) ? -1 : r.getByte(3);
-                logger.info("xxxxxxxx get value is " + v0 + " " v1 + " " + v2 + " " + v3);
+                logger.info("xxxxxxxx get value is " + v0 + " " + v1 + " " + v2 + " " + v3);
                 count += 1;
                 if (!hasNext()) {
                   UnsafeRow copy = row.copy(); // so that we don't have dangling pointers to freed page
