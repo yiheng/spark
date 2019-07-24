@@ -105,6 +105,10 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR
       s"""
           |${l.code}
           |${r.code}
+          |System.out.println("**** l.isNull" + ${l.isNull})
+          |System.out.println("**** r.isNull" + ${r.isNull})
+          |System.out.println("**** l.value" + ${l.value})
+          |System.out.println("**** r.value " + ${r.value})
           |if (${l.isNull} && ${r.isNull}) {
           |  // Nothing
           |} else if (${l.isNull}) {

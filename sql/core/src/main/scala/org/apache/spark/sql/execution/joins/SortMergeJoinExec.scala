@@ -417,6 +417,21 @@ case class SortMergeJoinExec(
      """.stripMargin
   }
 
+  private def genComparison2(ctx: CodegenContext, a: Seq[ExprCode], b: Seq[ExprCode]): String = {
+    val comparisons = a.zip(b).zipWithIndex.map { case ((l, r), i) =>
+      s"""
+         |if (comp == 0) {
+         |  comp = ${ctx.genComp(leftKeys(i).dataType, l.value, r.value)};
+         |  System.out.println("***** comp " + comp);
+         |}
+       """.stripMargin.trim
+    }
+    s"""
+       |comp = 0;
+       |${comparisons.mkString("\n")}
+     """.stripMargin
+  }
+
   /**
    * Generate a function to scan both left and right to find a match, returns the term for
    * matched one row from left side and buffered rows from right side.
@@ -463,7 +478,7 @@ case class SortMergeJoinExec(
          |      continue;
          |    }
          |    if (!$matches.isEmpty()) {
-         |      ${genComparison(ctx, leftKeyVars, matchedKeyVars)}
+         |      ${genComparison2(ctx, leftKeyVars, matchedKeyVars)}
          |      if (comp == 0) {
          |        return true;
          |      }
