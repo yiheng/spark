@@ -180,6 +180,47 @@ public final class UnsafeExternalRowSorter {
       }
       if (numRowsInserted != 0) {
         logger.info("<<<<< iterator count is " + sortedIterator.getNumRecords());
+        if (sortedIterator.getNumRecords() == 20000) {
+          return new AbstractIterator<UnsafeRow>() {
+            private long count = 0;
+
+            private final int numFields = schema.length();
+            private UnsafeRow row = new UnsafeRow(numFields);
+
+            @Override
+            public boolean hasNext() {
+              return sortedIterator.hasNext();
+            }
+
+            @Override
+            public UnsafeRow next() {
+              try {
+                sortedIterator.loadNext();
+                row.pointTo(
+                    sortedIterator.getBaseObject(),
+                    sortedIterator.getBaseOffset(),
+                    sortedIterator.getRecordLength());
+                logger.info("xxxxxx next is called, current pos is " + count);
+                count += 1;
+                if (!hasNext()) {
+                  UnsafeRow copy = row.copy(); // so that we don't have dangling pointers to freed page
+                  row = null; // so that we don't keep references to the base object
+                  cleanupResources();
+                  logger.info("xxxxxx Last row next, retrieve count is : " + count);
+                  return copy;
+                } else {
+                  return row;
+                }
+              } catch (IOException e) {
+                cleanupResources();
+                // Scala iterators don't declare any checked exceptions, so we need to use this hack
+                // to re-throw the exception:
+                Platform.throwException(e);
+              }
+              throw new RuntimeException("Exception should have been re-thrown in next()");
+            }
+          };
+        }
         return new AbstractIterator<UnsafeRow>() {
           private long count = 0;
 
