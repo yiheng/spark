@@ -260,6 +260,13 @@ public final class UnsafeExternalRowSorter {
                   row = null; // so that we don't keep references to the base object
                   cleanupResources();
                   logger.info("rrrrrrr Last row next, retrieve count is : " + count);
+
+                  InternalRow r = row.getStruct(1, 4);
+                  byte v0 = r.isNullAt(0) ? -1 : r.getByte(0);
+                  byte v1 = r.isNullAt(1) ? -1 : r.getByte(1);
+                  byte v2 = r.isNullAt(2) ? -1 : r.getByte(2);
+                  byte v3 = r.isNullAt(3) ? -1 : r.getByte(3);
+                  logger.info("rrrrrrr get value is " + v0 + " " + v1 + " " + v2 + " " + v3);
                   return copy;
                 } else {
                   return row;
