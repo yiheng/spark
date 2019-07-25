@@ -471,7 +471,7 @@ case class SortMergeJoinExec(
          |  int comp = 0;
          |  while ($leftRow == null) {
          |    if (!leftIter.hasNext()) return false;
-         |    $leftRow = (InternalRow) leftIter.next();
+         |    $leftRow = (InternalRow) leftIter.next().copy();
          |    ${leftKeyVars.map(_.code).mkString("\n")}
          |    if ($leftAnyNull) {
          |      $leftRow = null;
