@@ -28,6 +28,8 @@ import org.apache.spark.io.ReadAheadInputStream;
 import org.apache.spark.serializer.SerializerManager;
 import org.apache.spark.storage.BlockId;
 import org.apache.spark.unsafe.Platform;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 
@@ -36,6 +38,7 @@ import java.io.*;
  * of the file format).
  */
 public final class UnsafeSorterSpillReader extends UnsafeSorterIterator implements Closeable {
+  private static final Logger logger = LoggerFactory.getLogger(UnsafeSorterSpillReader.class);
   public static final int MAX_BUFFER_SIZE_BYTES = 16777216; // 16 mb
 
   private InputStream in;
@@ -101,6 +104,8 @@ public final class UnsafeSorterSpillReader extends UnsafeSorterIterator implemen
     // to avoid performance overhead. This check is added here in `loadNext()` instead of in
     // `hasNext()` because it's technically possible for the caller to be relying on
     // `getNumRecords()` instead of `hasNext()` to know when to stop.
+
+    logger.info("------ spill reader logger");
     if (taskContext != null) {
       taskContext.killTaskIfInterrupted();
     }

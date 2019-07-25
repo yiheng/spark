@@ -323,7 +323,6 @@ public final class UnsafeInMemorySorter {
       recordLength = UnsafeAlignedOffset.getSize(baseObject, baseOffset - uaoSize);
       keyPrefix = array.get(offset + position + 1);
       position += 2;
-      logger.info("----- sorted iterator");
     }
 
     @Override

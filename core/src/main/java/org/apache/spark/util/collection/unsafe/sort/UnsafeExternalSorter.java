@@ -598,6 +598,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
             nextUpstream = null;
           }
           numRecords--;
+          logger.info("--------- external sorter 2");
           upstream.loadNext();
         }
       } finally {
