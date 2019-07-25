@@ -31,6 +31,8 @@ import org.apache.spark.unsafe.UnsafeAlignedOffset;
 import org.apache.spark.unsafe.array.LongArray;
 import org.apache.spark.unsafe.memory.MemoryBlock;
 import org.apache.spark.util.collection.Sorter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Sorts records using an AlphaSort-style key-prefix sort. This sort stores pointers to records
@@ -40,6 +42,9 @@ import org.apache.spark.util.collection.Sorter;
  * random memory accesses improves cache hit rates.
  */
 public final class UnsafeInMemorySorter {
+
+
+  private static final Logger logger = LoggerFactory.getLogger(SortedIterator.class);
 
   private static final class SortComparator implements Comparator<RecordPointerAndKeyPrefix> {
 
@@ -318,6 +323,7 @@ public final class UnsafeInMemorySorter {
       recordLength = UnsafeAlignedOffset.getSize(baseObject, baseOffset - uaoSize);
       keyPrefix = array.get(offset + position + 1);
       position += 2;
+      logger.info("----- sorted iterator");
     }
 
     @Override
